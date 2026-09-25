@@ -98,11 +98,12 @@ export function resolveSpeed(tags, direction, zone) {
 
 // Tranches affichées dans les statistiques
 export const SPEED_BANDS = [
-  { key: 'b30', label: '≤ 30', max: 30, color: '#6a9f7a' },
-  { key: 'b50', label: '50', max: 50, color: '#4f86a8' },
-  { key: 'b70', label: '70', max: 70, color: '#c9a13b' },
-  { key: 'b90', label: '80-100', max: 100, color: '#d0703c' },
-  { key: 'b120', label: '110+', max: Infinity, color: '#a8434f' },
+  // Palette bleu → violet, volontairement sans vert/orange/rouge pour ne pas évoquer le trafic
+  { key: 'b30', label: '≤ 30', max: 30, color: '#5fb3b3' },
+  { key: 'b50', label: '50', max: 50, color: '#3d85c6' },
+  { key: 'b70', label: '70', max: 70, color: '#3f4fb5' },
+  { key: 'b90', label: '80-100', max: 100, color: '#7b3fa6' },
+  { key: 'b120', label: '110+', max: Infinity, color: '#3b1a5a' },
 ];
 
 export function bandOf(speed) {

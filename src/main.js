@@ -31,7 +31,7 @@ const store = {
 };
 
 const $ = (s) => document.querySelector(s);
-const ROUTE_COLORS = ['#2e4a7d', '#b4533c', '#4f7a5a'];
+const ROUTE_COLORS = ['#2e4a7d', '#8a6d3b', '#5c6b73'];
 const LETTERS = ['A', 'B', 'C'];
 
 const state = {
@@ -56,6 +56,43 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 const startIcon = L.divIcon({ className: 'start-pin', html: '<span></span>', iconSize: [26, 26], iconAnchor: [13, 13] });
 let startMarker = null;
 const routeLayer = L.layerGroup().addTo(map);
+
+// ---------- Légende des vitesses sur la carte ----------
+function showLegend(on) {
+  const el = $('#map-legend');
+  el.hidden = !on;
+  if (on && !el.innerHTML) {
+    el.innerHTML =
+      '<b>Vitesse autorisée</b>' +
+      SPEED_BANDS.map((b) => `<span><i style="background:${b.color}"></i>${b.label}</span>`).join('');
+  }
+}
+
+// ---------- Trafic en direct (optionnel, clé TomTom dans VITE_TOMTOM_KEY) ----------
+const TOMTOM_KEY = import.meta.env.VITE_TOMTOM_KEY;
+if (TOMTOM_KEY) {
+  const btn = $('#traffic');
+  btn.hidden = false;
+  const trafficUrl = () =>
+    `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_KEY}&tileSize=256&t=${Math.floor(Date.now() / 120000)}`;
+  const traffic = L.tileLayer(trafficUrl(), { maxZoom: 19, opacity: 0.85, attribution: 'Trafic © TomTom', zIndex: 5 });
+  let refresh = null;
+  const setTraffic = (on) => {
+    btn.setAttribute('aria-pressed', on);
+    btn.classList.toggle('is-on', on);
+    store.set('traffic', on);
+    if (on) {
+      traffic.setUrl(trafficUrl());
+      traffic.addTo(map);
+      refresh = setInterval(() => traffic.setUrl(trafficUrl()), 120000);
+    } else {
+      map.removeLayer(traffic);
+      clearInterval(refresh);
+    }
+  };
+  btn.addEventListener('click', () => setTraffic(!map.hasLayer(traffic)));
+  if (store.get('traffic', false)) setTraffic(true);
+}
 
 function setStart(lat, lon, label = '') {
   state.start = { lat, lon, label };
@@ -98,6 +135,83 @@ function updateStartInfo() {
     }
   }
   el.innerHTML = `<strong>${name}</strong>${region ? `<br>${region}` : ''}`;
+  renderPlaces();
+}
+
+// ---------- Mes adresses ----------
+// Adresses proposées d'office (ajoutées une seule fois, supprimables ensuite)
+const DEFAULT_PLACES = [
+  { id: 1, name: 'Blegny', label: 'Rue des Brasseurs 98-100, 4670 Blegny', lat: 50.694063, lon: 5.72602 },
+  { id: 2, name: 'Hermalle', label: 'Rue Wérihet 81, 4681 Hermalle-sous-Argenteau (Oupeye)', query: '81 rue Wérihet, 4681 Oupeye, Belgique' },
+];
+if (!store.get('placesSeeded', false)) {
+  const existing = store.get('places', []);
+  const missing = DEFAULT_PLACES.filter((d) => !existing.some((p) => p.id === d.id));
+  store.set('places', [...missing, ...existing]);
+  store.set('placesSeeded', true);
+}
+
+// Adresse sans coordonnées : géocodage au premier usage, puis mémorisation
+async function resolvePlace(p) {
+  if (p.lat != null) return p;
+  setStatus(`Localisation de « ${escapeHtml(p.name)} »…`);
+  const found = await searchPlace(p.query || p.label).catch(() => []);
+  if (!found.length) {
+    setStatus(`Adresse « ${escapeHtml(p.name)} » introuvable. Place le départ à la main puis enregistre-le.`, 'error');
+    return null;
+  }
+  setStatus('');
+  const places = store.get('places', []);
+  const target = places.find((x) => x.id === p.id);
+  if (target) {
+    target.lat = found[0].lat;
+    target.lon = found[0].lon;
+    store.set('places', places);
+  }
+  return { ...p, lat: found[0].lat, lon: found[0].lon };
+}
+const samePlace = (p, s) => s && p.lat != null && Math.abs(p.lat - s.lat) < 1e-4 && Math.abs(p.lon - s.lon) < 1e-4;
+
+function renderPlaces() {
+  const places = store.get('places', []);
+  const box = $('#places');
+  const current = places.find((p) => samePlace(p, state.start));
+  const chips = places
+    .map(
+      (p) => `<span class="place${samePlace(p, state.start) ? ' is-active' : ''}">
+        <button type="button" data-place="${p.id}">${escapeHtml(p.name)}</button>
+        <button type="button" class="place-del" data-del="${p.id}" aria-label="Retirer ${escapeHtml(p.name)}">×</button>
+      </span>`
+    )
+    .join('');
+  const add = state.start && !current ? '<button type="button" class="link" data-add-place>☆ Enregistrer ce départ</button>' : '';
+  box.innerHTML = chips + add;
+  box.hidden = !chips && !add;
+  box.querySelectorAll('[data-place]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      const p = await resolvePlace(places.find((x) => String(x.id) === b.dataset.place));
+      if (!p) return;
+      setStart(p.lat, p.lon, p.label || p.name);
+      map.setView([p.lat, p.lon], 14);
+    })
+  );
+  box.querySelectorAll('[data-del]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const p = places.find((x) => String(x.id) === b.dataset.del);
+      if (!confirm(`Retirer « ${p.name} » de tes adresses ?`)) return;
+      store.set('places', places.filter((x) => x !== p));
+      renderPlaces();
+    })
+  );
+  box.querySelector('[data-add-place]')?.addEventListener('click', () => {
+    const suggestion = places.length ? '' : 'Maison';
+    const name = prompt('Nom de cette adresse (ex. Maison, Chez ma sœur, Auto-école)', suggestion);
+    if (!name || !name.trim()) return;
+    const s = state.start;
+    places.push({ id: Date.now(), name: name.trim().slice(0, 30), lat: s.lat, lon: s.lon, label: s.label || '' });
+    store.set('places', places);
+    renderPlaces();
+  });
 }
 
 map.on('click', (e) => setStart(e.latlng.lat, e.latlng.lng));
@@ -308,6 +422,7 @@ function summaryOfCriteria(c) {
 function clearRoutes() {
   state.routes = [];
   routeLayer.clearLayers();
+  showLegend(false);
   $('#results').innerHTML = '';
 }
 
@@ -346,6 +461,7 @@ function revealMap() {
 
 function drawRoutes(fit = false) {
   routeLayer.clearLayers();
+  showLegend(state.routes.length > 0);
   state.routes.forEach((r, i) => {
     if (i !== state.selected) drawOne(r, ROUTE_COLORS[i % 3], false);
   });
@@ -364,7 +480,7 @@ function bandBar(stats) {
   const legend = SPEED_BANDS.filter((b) => stats.bands[b.key] > 0)
     .map((b) => `<li><i style="background:${b.color}"></i>${b.label} km/h <b>${formatKm(stats.bands[b.key])}</b></li>`)
     .join('');
-  return `<div class="bar" aria-hidden="true">${parts}</div><ul class="legend">${legend}</ul>`;
+  return `<p class="bar-title">Vitesse autorisée</p><div class="bar" aria-hidden="true">${parts}</div><ul class="legend">${legend}</ul>`;
 }
 
 function routeCard(r, i, { saved = false } = {}) {
@@ -500,6 +616,7 @@ function renderSaved() {
   const all = store.get('saved', []);
   const box = $('#saved');
   routeLayer.clearLayers();
+  showLegend(false);
   const redoCount = all.filter((r) => r.redo).length;
   const toolbar = `
     <div class="saved-bar">
@@ -586,6 +703,7 @@ function renderSaved() {
         return renderSaved();
       }
       routeLayer.clearLayers();
+      showLegend(true);
       drawOne(r, ROUTE_COLORS[0], true);
       map.fitBounds(L.latLngBounds(r.coords).pad(0.12));
       box.querySelectorAll('.card').forEach((c) => c.classList.toggle('is-selected', c === card));
@@ -625,6 +743,7 @@ function escapeHtml(s) {
 }
 
 // ---------- Démarrage ----------
+renderPlaces();
 renderLevels();
 applyLevelDefaults();
 updateSavedCount();

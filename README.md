@@ -13,6 +13,7 @@ Aucune IA dans la boucle : tout est calculé à partir des **données routières
 - Trois parcours proposés, avec pour chacun : distance, durée estimée, km par tranche de vitesse, nombre de ronds-points et de feux, principaux axes.
 - Export **GPX** (à ouvrir dans OsmAnd ou Organic Maps, qui guident le long du tracé) et lien **Google Maps** (approximatif : 9 étapes maximum).
 - **Mes parcours** : enregistrement dans le navigateur, avec note en étoiles, case « À refaire », commentaire et journal des sorties faites. Filtres « À refaire » et « 4 étoiles et plus ».
+- **Mes adresses** : enregistrer des points de départ (Maison, Chez ma sœur…) et les rappeler d'un geste.
 - **Sauvegarde / restauration** des parcours dans un fichier `.json` (pour changer d'appareil ou de navigateur).
 
 ### Où sont gardés les parcours ?
@@ -34,6 +35,15 @@ npm run dev      # http://localhost:5173
 npm test         # tests du moteur de calcul
 npm run build    # version de production dans dist/
 ```
+
+## Trafic en direct (optionnel)
+
+Un bouton « feu tricolore » sur la carte affiche le trafic en temps réel (couche TomTom, mise à jour toutes les 2 minutes). Il n'apparaît que si une clé est configurée :
+
+1. Créer un compte gratuit sur [developer.tomtom.com](https://developer.tomtom.com) (sans carte bancaire) et copier la clé d'API.
+2. Dans Vercel : *Settings > Environment Variables*, ajouter `VITE_TOMTOM_KEY` avec la clé, puis *Redeploy*.
+
+L'offre gratuite couvre largement un usage personnel (quota mensuel de tuiles). Le trafic est affiché, il n'influence pas le calcul des parcours.
 
 ## Mettre en ligne (GitHub + Vercel)
 

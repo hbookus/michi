@@ -360,3 +360,31 @@ a { color: var(--accent); }
 .filters { display: flex; gap: 6px; flex-wrap: wrap; }
 .filter { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
 .filter.is-active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+/* ---------- Mes adresses ---------- */
+.places { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 8px; }
+.places[hidden] { display: none; }
+.place { display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; overflow: hidden; }
+.place.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.place button { border: 0; background: none; cursor: pointer; font-size: 13.5px; padding: 6px 4px 6px 12px; font-weight: 500; }
+.place .place-del { padding: 6px 10px 6px 6px; color: var(--ink-2); font-size: 15px; }
+
+/* ---------- Carte : trafic et légende ---------- */
+.map-btn-2 { top: 62px; }
+.map-btn.is-on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.map-legend {
+  position: absolute; z-index: 500; left: 10px; bottom: 24px;
+  display: flex; flex-direction: column; gap: 3px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 10px; font-size: 12px; box-shadow: var(--shadow);
+}
+.map-legend[hidden] { display: none; }
+.map-legend b { font-size: 11.5px; margin-bottom: 2px; }
+.map-legend span { display: flex; align-items: center; gap: 6px; }
+.map-legend i { width: 18px; height: 4px; border-radius: 2px; display: inline-block; }
+.bar-title { margin: 0 0 5px; font-size: 12px; color: var(--ink-2); }
+@media (max-width: 899px) {
+  .map-legend { flex-direction: row; flex-wrap: wrap; gap: 4px 10px; right: 64px; bottom: 22px; padding: 6px 8px; font-size: 11px; }
+  .map-legend b { width: 100%; margin: 0; font-size: 11px; }
+  .map-legend i { width: 12px; }
+}
