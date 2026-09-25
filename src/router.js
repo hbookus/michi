@@ -100,10 +100,12 @@ export function shortestPath(graph, s, t, c, mask, used, usedPenalty = 4) {
 export function snapStart(graph, la, lo, c) {
   const near = nearestNodes(graph, la, lo, c, 15);
   let best = null;
+  const seen = new Set();
   for (const cand of near) {
+    if (seen.has(cand.i)) continue;
     const scc = stronglyConnected(graph, cand.i, c);
+    for (const m of scc.members) seen.add(m);
     if (!best || scc.members.length > best.scc.members.length) best = { node: cand.i, dist: cand.d, scc };
-    if (scc.members.length > 300) break;
   }
   return best;
 }
@@ -226,6 +228,7 @@ export async function generateLoops(graph, startLatLon, target, c, opts = {}) {
     start: [sLat, sLon],
     startGap: haversine(startLatLon[0], startLatLon[1], sLat, sLon),
     coords: pathCoords(graph, r.edges),
+    networkNodes: scc.members.length,
   }));
 }
 

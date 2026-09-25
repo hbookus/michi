@@ -69,7 +69,7 @@ describe('boucles', () => {
         for (let i = 1; i < r.edges.length; i++) expect(r.edges[i].from).toBe(r.edges[i - 1].to);
         // critères respectés
         for (const e of r.edges) expect(edgeAllowed(e, c)).toBe(true);
-        expect(r.stats.maxSpeed).toBeLessThanOrEqual(c.maxSpeed);
+        expect(r.stats.maxSpeed).toBeLessThanOrEqual(c.linkMax || c.maxSpeed);
         // distance proche de la cible (±20 %)
         expect(Math.abs(r.stats.distance - km * 1000) / (km * 1000)).toBeLessThan(0.2);
       }
@@ -123,5 +123,35 @@ describe('autres pays', () => {
     expect(parseMaxspeed('DE:rural', 'FR')).toBe(100);
     expect(parseMaxspeed('GB:nsl_single', 'GB')).toBe(97);
     expect(parseMaxspeed('30 mph', 'GB')).toBe(48);
+  });
+});
+
+describe('réseau fragmenté', () => {
+  // Deux quartiers à 50 km/h reliés uniquement par une route à 90
+  it('les liaisons plus rapides permettent d’atteindre la distance visée', async () => {
+    const osm = gridOSM({ size: 40 });
+    // toutes les routes principales passent à 90 : les rues à 50 forment des îlots
+    for (const el of osm.elements) if (el.tags && el.tags.highway !== 'residential') el.tags.maxspeed = '90';
+    // coupe les rues résidentielles qui traversent les grands axes : îlots de quartiers
+    const step = 0.00135;
+    osm.elements = osm.elements.filter((el) => {
+      if (el.type !== 'way' || el.tags.highway !== 'residential') return true;
+      return !el.geometry.some((g) => Math.round((g.lat - 50.44) / step) % 10 === 0) &&
+        !el.geometry.some((g) => Math.round((g.lon - 4.84) / (step * 1.55)) % 10 === 0);
+    });
+    const g = buildGraph(osm, 'BE-WAL');
+    const start = [osm.center.lat, osm.center.lon];
+    const strict = buildCriteria('ville', { links: false });
+    const soft = buildCriteria('ville', { links: true });
+    const r1 = await generateLoops(g, start, { type: 'distance', value: 20000 }, strict, { seed: 3 });
+    const r2 = await generateLoops(g, start, { type: 'distance', value: 20000 }, soft, { seed: 3 });
+    const d1 = Math.max(...r1.map((r) => r.stats.distance));
+    const d2 = Math.max(...r2.map((r) => r.stats.distance));
+    console.log('strict', (d1 / 1000).toFixed(1), 'km | avec liaisons', (d2 / 1000).toFixed(1), 'km');
+    expect(d2).toBeGreaterThan(d1);
+    expect(Math.abs(d2 - 20000) / 20000).toBeLessThan(0.2);
+    // les liaisons restent minoritaires
+    const fast = r2[0].stats.bands.b90 + r2[0].stats.bands.b120;
+    console.log('part > 50 km/h', ((fast / r2[0].stats.distance) * 100).toFixed(0), '%');
   });
 });

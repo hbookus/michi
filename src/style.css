@@ -370,8 +370,15 @@ a { color: var(--accent); }
 .place .place-del { padding: 6px 10px 6px 6px; color: var(--ink-2); font-size: 15px; }
 
 /* ---------- Carte : trafic et légende ---------- */
-.map-btn-2 { top: 62px; }
-.map-btn.is-on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.map-pill {
+  position: absolute; z-index: 500; left: 12px; top: 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow); font-weight: 600; font-size: 14px; cursor: pointer;
+}
+.map-pill[hidden] { display: none; }
+.map-pill.is-on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .map-legend {
   position: absolute; z-index: 500; left: 10px; bottom: 24px;
   display: flex; flex-direction: column; gap: 3px;
@@ -388,3 +395,6 @@ a { color: var(--accent); }
   .map-legend b { width: 100%; margin: 0; font-size: 11px; }
   .map-legend i { width: 12px; }
 }
+
+.tune-grid label.wide { grid-column: 1 / -1; }
+.status.is-warn { color: var(--vermilion); }

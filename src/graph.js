@@ -100,13 +100,15 @@ export function buildGraph(osm, regionCode) {
 
 export function edgeAllowed(e, c) {
   if (!c.highways.has(e.hw)) return false;
-  if (e.speed > c.maxSpeed) return false;
+  if (e.speed > c.maxSpeed && !(c.linkMax && e.speed <= c.linkMax)) return false;
   if (c.noUnpaved && e.unpaved) return false;
   return true;
 }
 
 export function edgeFactor(e, c) {
   let f = 1;
+  // liaison plus rapide que la vitesse max : autorisée mais fortement découragée
+  if (e.speed > c.maxSpeed) f *= 4;
   if (e.speed < c.prefMin) f += (c.prefMin - e.speed) / 40;
   if (c.hwWeight && c.hwWeight[e.hw]) f *= c.hwWeight[e.hw];
   if (e.rb) {

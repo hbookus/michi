@@ -73,18 +73,28 @@ const TOMTOM_KEY = import.meta.env.VITE_TOMTOM_KEY;
 if (TOMTOM_KEY) {
   const btn = $('#traffic');
   btn.hidden = false;
-  const trafficUrl = () =>
-    `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_KEY}&tileSize=256&t=${Math.floor(Date.now() / 120000)}`;
-  const traffic = L.tileLayer(trafficUrl(), { maxZoom: 19, opacity: 0.85, attribution: 'Trafic © TomTom', zIndex: 5 });
+  const trafficUrl = `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_KEY}&tileSize=256`;
+  const traffic = L.tileLayer(trafficUrl, { maxZoom: 19, opacity: 0.85, attribution: 'Trafic © TomTom', zIndex: 5 });
   let refresh = null;
+  let errors = 0;
+  let loaded = 0;
+  traffic.on('tileload', () => loaded++);
+  traffic.on('tileerror', () => {
+    errors++;
+    if (errors === 4 && loaded === 0) {
+      setStatus("Trafic indisponible : TomTom refuse la clé. Vérifie la clé dans Vercel et le domaine autorisé chez TomTom.", 'error');
+    }
+  });
   const setTraffic = (on) => {
     btn.setAttribute('aria-pressed', on);
     btn.classList.toggle('is-on', on);
     store.set('traffic', on);
     if (on) {
-      traffic.setUrl(trafficUrl());
+      errors = 0;
+      loaded = 0;
       traffic.addTo(map);
-      refresh = setInterval(() => traffic.setUrl(trafficUrl()), 120000);
+      // rafraîchit les tuiles toutes les 2 minutes
+      refresh = setInterval(() => traffic.redraw(), 120000);
     } else {
       map.removeLayer(traffic);
       clearInterval(refresh);
@@ -292,6 +302,8 @@ function applyLevelDefaults() {
   $('#roundabouts').value = lv.roundabouts;
   $('#signals').value = lv.signals;
   $('#avoid-motorway').checked = false;
+  $('#links').checked = !!lv.linkMax;
+  $('#links').closest('label').hidden = lv.maxSpeed >= 90;
   $('#avoid-motorway').closest('label').hidden = state.level !== 'rapide';
   configureSlider();
   clearRoutes();
@@ -373,6 +385,7 @@ $('#go').addEventListener('click', async () => {
       roundabouts: $('#roundabouts').value,
       signals: $('#signals').value,
       avoidMotorway: $('#avoid-motorway').checked,
+      links: $('#links').closest('label').hidden ? undefined : $('#links').checked,
     });
     const target =
       state.mode === 'duration'
@@ -401,7 +414,21 @@ $('#go').addEventListener('click', async () => {
     if (!routes.length) throw new Error('Aucun parcours trouvé avec ces critères. Essaie une autre durée ou assouplis les critères.');
     state.routes = routes.map((r) => ({ ...r, level: state.level, criteria: summaryOfCriteria(criteria) }));
     state.selected = 0;
-    setStatus(`${routes.length} parcours proposés. Touche une carte pour l'afficher.`);
+    const got = Math.max(...routes.map((r) => (target.type === 'duration' ? r.stats.duration : r.stats.distance)));
+    if (got < target.value * 0.75) {
+      const best = target.type === 'duration' ? formatDuration(got) : formatKm(got);
+      const tips = [];
+      if (!$('#links').closest('label').hidden && !$('#links').checked) tips.push('coche « liaisons plus rapides » dans Ajuster les critères');
+      if (criteria.maxSpeed < 90) tips.push('monte la vitesse maximale');
+      if (state.level !== 'route' && state.level !== 'rapide') tips.push('ou choisis le profil Routes');
+      setStatus(
+        `Avec ces critères, le réseau autour du départ ne permet pas plus de <b>${best}</b> sans tourner en rond.` +
+          (tips.length ? ` Pour aller plus loin : ${tips.join(', ')}.` : ''),
+        'warn'
+      );
+    } else {
+      setStatus(`${routes.length} parcours proposés. Touche une carte pour l'afficher.`);
+    }
     renderResults();
     drawRoutes(true);
   } catch (err) {

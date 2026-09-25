@@ -19,8 +19,9 @@
         <button id="locate" class="map-btn" type="button" title="Ma position" aria-label="Utiliser ma position">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="currentColor"/><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
-        <button id="traffic" class="map-btn map-btn-2" type="button" title="Trafic en direct" aria-label="Afficher le trafic en direct" aria-pressed="false" hidden>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="7" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="17" r="1.8" fill="currentColor"/></svg>
+        <button id="traffic" class="map-pill" type="button" title="Trafic en direct" aria-pressed="false" hidden>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="7" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="17" r="1.8" fill="currentColor"/></svg>
+          Trafic
         </button>
         <div id="map-legend" class="map-legend" hidden></div>
       </section>
@@ -95,6 +96,7 @@
                 </select>
               </label>
               <label class="check"><input id="avoid-motorway" type="checkbox" /> Sans autoroute</label>
+              <label class="check wide"><input id="links" type="checkbox" /> Autoriser des liaisons plus rapides entre les zones (le moins possible)</label>
             </div>
           </details>
 

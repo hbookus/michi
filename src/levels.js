@@ -18,7 +18,8 @@ export const LEVELS = {
     hwWeight: { tertiary: 1.3 },
     defaultKm: 8,
     defaultMin: 25,
-    maxKm: 20,
+    maxKm: 30,
+    linkMax: 0,
     avgSpeedGuess: 22,
   },
   ville: {
@@ -32,7 +33,8 @@ export const LEVELS = {
     hwWeight: { residential: 1.3, living_street: 2 },
     defaultKm: 12,
     defaultMin: 35,
-    maxKm: 40,
+    maxKm: 60,
+    linkMax: 90,
     avgSpeedGuess: 25,
   },
   route: {
@@ -79,6 +81,7 @@ export function buildCriteria(levelKey, overrides = {}) {
     prefMin: Math.min(L.prefMin, maxSpeed),
     roundabouts: overrides.roundabouts ?? L.roundabouts,
     signalPenalty: signals === 'avoid' ? 250 : 0,
+    linkMax: overrides.links === false ? 0 : overrides.links === true ? Math.max(90, maxSpeed) : L.linkMax || 0,
     hwWeight: L.hwWeight,
     noUnpaved: true,
     avgSpeedGuess: Math.min(L.avgSpeedGuess, maxSpeed * 0.6),
