@@ -1,0 +1,83 @@
+# Prépare chaque mois les carreaux de routes de Michi à partir d'OpenStreetMap
+# et les publie sur GitHub Pages. L'app les charge en 1 à 2 secondes au lieu
+# d'interroger les serveurs Overpass (souvent saturés).
+#
+# Mise en place (une seule fois) :
+#   1. Settings > Pages > Build and deployment > Source : « GitHub Actions »
+#   2. Onglet Actions > « Préparer les carreaux » > Run workflow
+
+name: Préparer les carreaux
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 2 * *' # le 2 de chaque mois, 3 h 17 UTC
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: tiles
+  cancel-in-progress: false
+
+env:
+  # Extraits Geofabrik à inclure (séparés par des espaces), ex. "europe/belgium europe/luxembourg"
+  REGIONS: europe/belgium
+
+jobs:
+  tiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Outils
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q osmium-tool
+          pip install osmium
+
+      - name: Téléchargement et filtrage des routes
+        run: |
+          mkdir -p work
+          files=""
+          for r in $REGIONS; do
+            name=$(basename "$r")
+            curl -fsSL -o "work/$name.osm.pbf" "https://download.geofabrik.de/$r-latest.osm.pbf"
+            osmium tags-filter "work/$name.osm.pbf" \
+              w/highway=motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,tertiary,tertiary_link,unclassified,residential,living_street \
+              n/highway=traffic_signals \
+              -o "work/$name-roads.osm.pbf" --overwrite
+            files="$files work/$name-roads.osm.pbf"
+          done
+          osmium merge $files -o work/roads.osm.pbf --overwrite
+          ls -lh work
+
+      - name: Construction des carreaux
+        run: |
+          mkdir -p site
+          python3 scripts/build_tiles.py work/roads.osm.pbf site/tiles
+          echo '<!doctype html><meta charset="utf-8"><title>Michi · carreaux</title><p>Carreaux de routes pour Michi (données © contributeurs OpenStreetMap, ODbL).</p>' > site/index.html
+          du -sh site/tiles
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Indiquer l'adresse des carreaux à l'app
+        run: |
+          base="${{ steps.deployment.outputs.page_url }}tiles/"
+          printf '{"base":"%s","updated":"%s","regions":"%s"}\n' "$base" "$(date -u +%F)" "$REGIONS" > public/tiles.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/tiles.json
+          git diff --cached --quiet || git commit -m "Carreaux de routes mis à jour ($(date -u +%F))"
+          git push
