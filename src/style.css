@@ -398,3 +398,43 @@ a { color: var(--accent); }
 
 .tune-grid label.wide { grid-column: 1 / -1; }
 .status.is-warn { color: var(--vermilion); }
+
+/* ---------- Bouton Démarrer ---------- */
+.btn-start {
+  border: 0; border-radius: 10px; padding: 8px 16px;
+  background: var(--accent); color: var(--accent-ink);
+  font-weight: 600; font-size: 14px; cursor: pointer;
+}
+
+/* ---------- Trafic sous le parcours ---------- */
+.traffic-box:empty { display: none; }
+.traffic-box { margin-top: 10px; }
+.traffic { border-left: 4px solid var(--line); padding: 6px 10px; border-radius: 0 8px 8px 0; background: var(--paper); }
+.traffic p { margin: 0; }
+.traffic p + p { margin-top: 2px; }
+.traffic.is-low { border-left-color: #3f8f5b; }
+.traffic.is-medium { border-left-color: #e8a33d; }
+.traffic.is-high { border-left-color: #c0392b; }
+
+/* ---------- Sortie en cours ---------- */
+.ride {
+  margin: 0 0 16px; padding: 12px 14px; border-radius: var(--radius);
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.ride[hidden] { display: none; }
+.ride-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ride textarea {
+  width: 100%; resize: vertical; padding: 9px 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit;
+}
+.ride .actions { margin-top: 0; align-items: center; }
+
+/* ---------- Stabilité sur téléphone ---------- */
+html, body { overflow-x: hidden; max-width: 100%; }
+body { overscroll-behavior-x: none; -webkit-text-size-adjust: 100%; }
+.panel, .card, .results, .block { min-width: 0; max-width: 100%; }
+.card h3, .roads, .traffic, .search-results button, #start-info { overflow-wrap: anywhere; }
+/* 16 px minimum : évite le zoom automatique de l'iPhone sur les champs */
+input, select, textarea { font-size: 16px !important; }
+.figures { grid-template-columns: repeat(4, minmax(0, 1fr)); }

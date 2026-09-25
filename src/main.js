@@ -9,6 +9,7 @@ import { generateLoops } from './router.js';
 import { SPEED_BANDS, bandOf, zoneOf } from './speed.js';
 import { formatDuration, formatKm } from './stats.js';
 import { download, googleMapsUrl, toGPX } from './export.js';
+import { checkRouteTraffic, trafficEnabled, trafficSentence } from './traffic.js';
 
 // ---------- Stockage local (préférences, parcours enregistrés) ----------
 const store = {
@@ -66,42 +67,6 @@ function showLegend(on) {
       '<b>Vitesse autorisée</b>' +
       SPEED_BANDS.map((b) => `<span><i style="background:${b.color}"></i>${b.label}</span>`).join('');
   }
-}
-
-// ---------- Trafic en direct (optionnel, clé TomTom dans VITE_TOMTOM_KEY) ----------
-const TOMTOM_KEY = import.meta.env.VITE_TOMTOM_KEY;
-if (TOMTOM_KEY) {
-  const btn = $('#traffic');
-  btn.hidden = false;
-  const trafficUrl = `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_KEY}&tileSize=256`;
-  const traffic = L.tileLayer(trafficUrl, { maxZoom: 19, opacity: 0.85, attribution: 'Trafic © TomTom', zIndex: 5 });
-  let refresh = null;
-  let errors = 0;
-  let loaded = 0;
-  traffic.on('tileload', () => loaded++);
-  traffic.on('tileerror', () => {
-    errors++;
-    if (errors === 4 && loaded === 0) {
-      setStatus("Trafic indisponible : TomTom refuse la clé. Vérifie la clé dans Vercel et le domaine autorisé chez TomTom.", 'error');
-    }
-  });
-  const setTraffic = (on) => {
-    btn.setAttribute('aria-pressed', on);
-    btn.classList.toggle('is-on', on);
-    store.set('traffic', on);
-    if (on) {
-      errors = 0;
-      loaded = 0;
-      traffic.addTo(map);
-      // rafraîchit les tuiles toutes les 2 minutes
-      refresh = setInterval(() => traffic.redraw(), 120000);
-    } else {
-      map.removeLayer(traffic);
-      clearInterval(refresh);
-    }
-  };
-  btn.addEventListener('click', () => setTraffic(!map.hasLayer(traffic)));
-  if (store.get('traffic', false)) setTraffic(true);
 }
 
 function setStart(lat, lon, label = '') {
@@ -412,7 +377,7 @@ $('#go').addEventListener('click', async () => {
       onProgress: (p) => setStatus(`Recherche de parcours… ${Math.round(p * 100)} %`),
     });
     if (!routes.length) throw new Error('Aucun parcours trouvé avec ces critères. Essaie une autre durée ou assouplis les critères.');
-    state.routes = routes.map((r) => ({ ...r, level: state.level, criteria: summaryOfCriteria(criteria) }));
+    state.routes = routes.map((r) => ({ ...r, level: state.level, criteria: summaryOfCriteria(criteria), traffic: trafficEnabled ? 'pending' : undefined }));
     state.selected = 0;
     const got = Math.max(...routes.map((r) => (target.type === 'duration' ? r.stats.duration : r.stats.distance)));
     if (got < target.value * 0.75) {
@@ -431,6 +396,7 @@ $('#go').addEventListener('click', async () => {
     }
     renderResults();
     drawRoutes(true);
+    checkTrafficForResults();
   } catch (err) {
     console.error(err);
     setStatus(escapeHtml(err.message || String(err)), 'error');
@@ -476,6 +442,12 @@ function drawOne(route, color, selected) {
       L.polyline(s.pts, { color: s.band.color, weight: 5, opacity: 1 }).addTo(routeLayer);
     }
     L.circleMarker(route.coords[0], { radius: 7, color: '#fff', weight: 3, fillColor: color, fillOpacity: 1 }).addTo(routeLayer);
+    for (const p of route.traffic?.slowPoints || []) {
+      const bad = p.closure || p.ratio < 0.45;
+      L.circleMarker([p.lat, p.lon], { radius: 8, color: '#fff', weight: 2, fillColor: bad ? '#c0392b' : '#e8a33d', fillOpacity: 1 })
+        .bindTooltip(p.closure ? 'Route fermée' : `Trafic : ${Math.round(p.current)} km/h au lieu de ${Math.round(p.free)}${p.road ? ` · ${escapeHtml(p.road)}` : ''}`)
+        .addTo(routeLayer);
+    }
   } else {
     L.polyline(route.coords, { color, weight: 4, opacity: 0.35, dashArray: '6 6' }).addTo(routeLayer);
   }
@@ -536,20 +508,46 @@ function routeCard(r, i, { saved = false } = {}) {
       ${roads}
       <p class="small muted">${escapeHtml(LEVELS[r.level]?.label || '')}${r.criteria ? ' · ' + escapeHtml(r.criteria) : ''} · ${est ? `${est} % des vitesses estimées` : 'vitesses toutes signalées dans OSM'}</p>
       ${gap}
+      <div class="traffic-box" data-traffic>${trafficHtml(r, saved)}</div>
       ${saved ? notesBlock(r) : ''}
       <div class="actions">
+        <button type="button" class="btn-start" data-act="start">Démarrer</button>
         <button type="button" class="btn-ghost" data-act="gpx">GPX</button>
-        <a class="btn-ghost" data-act="gmaps" href="${googleMapsUrl(r)}" target="_blank" rel="noopener">Google Maps</a>
-        ${saved ? '<button type="button" class="btn-ghost" data-act="show">Afficher</button><button type="button" class="btn-ghost danger" data-act="del">Supprimer</button>' : '<button type="button" class="btn-ghost" data-act="save">Enregistrer</button>'}
+        ${
+          saved
+            ? '<button type="button" class="btn-ghost" data-act="show">Afficher</button><button type="button" class="btn-ghost" data-act="rename">Renommer</button><button type="button" class="btn-ghost danger" data-act="del">Supprimer</button>'
+            : `<button type="button" class="btn-ghost" data-act="save"${r.savedId ? ' disabled' : ''}>${r.savedId ? 'Enregistré' : 'Enregistrer'}</button>`
+        }
       </div>
     </article>`;
 }
 
+function trafficHtml(r, saved) {
+  if (!trafficEnabled) return '';
+  const t = r.traffic;
+  if (t === 'pending') return '<p class="traffic muted small">Trafic : vérification en cours…</p>';
+  if (!t) {
+    return saved ? '<button type="button" class="link small" data-act="traffic">Vérifier le trafic maintenant</button>' : '';
+  }
+  const s = trafficSentence(t);
+  const time = new Date(t.checkedAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+  return `<div class="traffic is-${s.cls}">
+      <p><b>${escapeHtml(s.title)}</b></p>
+      <p class="small">${escapeHtml(s.text)}</p>
+      ${t.delayMin > 0 && r.stats ? `<p class="small">Durée avec le trafic actuel : environ <b>${formatDuration(r.stats.duration + t.delayMin * 60)}</b></p>` : ''}
+      <p class="small muted">Vérifié à ${time} · <button type="button" class="link" data-act="traffic">Actualiser</button></p>
+    </div>`;
+}
+
+const doneDate = (d) => (typeof d === 'string' ? d : d.date);
+
 function doneSummary(r) {
   const d = r.done || [];
   if (!d.length) return 'Pas encore fait';
-  const last = new Date(d[d.length - 1]).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' });
-  return `Fait ${d.length} fois · dernière le ${last}`;
+  const lastItem = d[d.length - 1];
+  const last = new Date(doneDate(lastItem)).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' });
+  const mins = typeof lastItem === 'object' && lastItem.minutes ? ` (${formatDuration(lastItem.minutes * 60)})` : '';
+  return `Fait ${d.length} fois · dernière le ${last}${mins}`;
 }
 
 function notesBlock(r) {
@@ -597,8 +595,9 @@ function renderResults() {
     card.addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (act === 'gpx') return download(fileName(r, i), toGPX(r, `Michi · ${LEVELS[r.level].label} · ${formatKm(r.stats.distance)}`));
-      if (act === 'gmaps') return;
       if (act === 'save') return saveRoute(r, e.target);
+      if (act === 'start') return startRide(r);
+      if (act === 'traffic') return refreshTraffic(r, card, i === state.selected);
       state.selected = i;
       box.querySelectorAll('.card').forEach((c) => c.classList.toggle('is-selected', +c.dataset.i === i));
       drawRoutes(true);
@@ -607,15 +606,61 @@ function renderResults() {
   });
 }
 
+// ---------- Trafic le long des parcours ----------
+function edgeNames(r) {
+  return r.edges ? r.edges.map((e) => (e.ref && e.name ? `${e.ref} · ${e.name}` : e.ref || e.name || '')) : null;
+}
+
+async function refreshTraffic(r, card, redraw) {
+  if (!trafficEnabled) return;
+  r.traffic = 'pending';
+  const box = card?.querySelector('[data-traffic]');
+  if (box) box.innerHTML = trafficHtml(r, !!r.id && !r.edges);
+  try {
+    r.traffic = await checkRouteTraffic(r, edgeNames(r));
+  } catch (err) {
+    r.traffic = null;
+    if (err.auth) setStatus('Trafic indisponible : TomTom refuse la clé (vérifie la clé dans Vercel et le domaine autorisé chez TomTom).', 'error');
+  }
+  if (box) box.innerHTML = trafficHtml(r, !!r.id && !r.edges);
+  if (redraw) {
+    routeLayer.clearLayers();
+    if (r.edges) drawRoutes();
+    else {
+      showLegend(true);
+      drawOne(r, ROUTE_COLORS[0], true);
+    }
+  }
+}
+
+function checkTrafficForResults() {
+  if (!trafficEnabled) return;
+  const box = $('#results');
+  state.routes.forEach((r, i) => refreshTraffic(r, box.querySelector(`.card[data-i="${i}"]`), i === state.selected));
+}
+
 // ---------- Parcours enregistrés ----------
+function defaultName(r) {
+  return `${LEVELS[r.level].label} · ${formatKm(r.stats.distance)} · ${state.start?.label?.split(',')[0] || ''}`.replace(/ · $/, '');
+}
+
 function saveRoute(r, btn) {
-  const def = `${LEVELS[r.level].label} · ${formatKm(r.stats.distance)} · ${state.start?.label?.split(',')[0] || ''}`.replace(/ · $/, '');
+  const def = defaultName(r);
   const name = prompt('Nom du parcours', def);
   if (name === null) return;
+  if (storeRoute(r, name.trim() || def) && btn) {
+    btn.textContent = 'Enregistré';
+    btn.disabled = true;
+  }
+}
+
+function storeRoute(r, name) {
+  if (r.savedId) return r.savedId;
   const saved = store.get('saved', []);
+  const id = Date.now();
   saved.unshift({
-    id: Date.now(),
-    name: name.trim() || def,
+    id,
+    name,
     date: new Date().toISOString(),
     level: r.level,
     criteria: r.criteria,
@@ -626,11 +671,108 @@ function saveRoute(r, btn) {
   try {
     navigator.storage?.persist?.();
   } catch {}
-  if (!store.set('saved', saved)) return setStatus("Impossible d'enregistrer : stockage du navigateur indisponible.", 'error');
-  btn.textContent = 'Enregistré';
-  btn.disabled = true;
+  if (!store.set('saved', saved)) {
+    setStatus("Impossible d'enregistrer : stockage du navigateur indisponible.", 'error');
+    return null;
+  }
+  r.savedId = id;
   updateSavedCount();
+  return id;
 }
+
+// ---------- Sortie en cours ----------
+function startRide(r) {
+  const id = r.edges ? storeRoute(r, defaultName(r)) : r.id;
+  if (!id) return;
+  const name = r.name || store.get('saved', []).find((x) => x.id === id)?.name || 'Parcours';
+  store.set('ride', { id, name, startedAt: new Date().toISOString() });
+  renderRide();
+  // Ouvre le guidage (l'app Google Maps sur téléphone)
+  window.open(googleMapsUrl(r), '_blank', 'noopener');
+  const btn = document.querySelector(`.card[data-i="${state.routes.indexOf(r)}"] [data-act=save]`);
+  if (btn) {
+    btn.textContent = 'Enregistré';
+    btn.disabled = true;
+  }
+}
+
+let rideTimer = null;
+function renderRide(open = false) {
+  const el = $('#ride');
+  const ride = store.get('ride', null);
+  clearInterval(rideTimer);
+  if (!ride) {
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+  el.hidden = false;
+  const minutes = () => Math.max(1, Math.round((Date.now() - new Date(ride.startedAt)) / 60000));
+  const r = store.get('saved', []).find((x) => x.id === ride.id);
+  if (!open) {
+    el.innerHTML = `
+      <div class="ride-head">
+        <div><b>Sortie en cours</b><span class="small muted"> · ${escapeHtml(ride.name)} · depuis <span data-min>${formatDuration(minutes() * 60)}</span></span></div>
+        <button type="button" class="btn-start" data-ride="finish">Terminer</button>
+      </div>`;
+    rideTimer = setInterval(() => {
+      const m = el.querySelector('[data-min]');
+      if (m) m.textContent = formatDuration(minutes() * 60);
+    }, 30000);
+  } else {
+    el.innerHTML = `
+      <div class="ride-head"><b>Retour de sortie</b><span class="small muted">${formatDuration(minutes() * 60)} · ${escapeHtml(ride.name)}</span></div>
+      <div class="stars" data-ride-stars>${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star${r && n <= (r.rating || 0) ? ' is-on' : ''}" data-v="${n}" aria-label="${n} étoile${n > 1 ? 's' : ''}">★</button>`).join('')}</div>
+      <label class="redo"><input type="checkbox" data-ride-redo${r?.redo ? ' checked' : ''} /> À refaire</label>
+      <textarea data-ride-comment rows="3" placeholder="Comment ça s'est passé ? Un carrefour difficile, un rond-point, une insertion…"></textarea>
+      <div class="actions">
+        <button type="button" class="btn-start" data-ride="save">Enregistrer le retour</button>
+        <button type="button" class="btn-ghost" data-ride="maps">Rouvrir le guidage</button>
+        <button type="button" class="link" data-ride="cancel">Annuler la sortie</button>
+      </div>`;
+    let rating = r?.rating || 0;
+    el.querySelectorAll('[data-ride-stars] .star').forEach((b) =>
+      b.addEventListener('click', () => {
+        rating = rating === +b.dataset.v ? 0 : +b.dataset.v;
+        el.querySelectorAll('[data-ride-stars] .star').forEach((x) => x.classList.toggle('is-on', +x.dataset.v <= rating));
+      })
+    );
+    el.querySelector('[data-ride=save]').addEventListener('click', () => {
+      const text = el.querySelector('[data-ride-comment]').value.trim();
+      const redo = el.querySelector('[data-ride-redo]').checked;
+      const day = new Date(ride.startedAt).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' });
+      updateSaved(ride.id, (x) => ({
+        done: [...(x.done || []), { date: ride.startedAt, minutes: minutes() }],
+        rating: rating || x.rating || 0,
+        redo,
+        comment: text ? `${x.comment ? x.comment + '\n' : ''}${day} : ${text}` : x.comment,
+      }));
+      store.set('ride', null);
+      renderRide();
+      setStatus('Retour enregistré dans « Mes parcours ».');
+      if (!$('#tab-saved').hidden) renderSaved();
+    });
+    el.querySelector('[data-ride=maps]').addEventListener('click', () => {
+      const saved = store.get('saved', []).find((x) => x.id === ride.id);
+      if (saved) window.open(googleMapsUrl(saved), '_blank', 'noopener');
+    });
+    el.querySelector('[data-ride=cancel]').addEventListener('click', () => {
+      if (!confirm('Annuler cette sortie ? Rien ne sera noté.')) return;
+      store.set('ride', null);
+      renderRide();
+    });
+    return;
+  }
+  el.querySelector('[data-ride=finish]').addEventListener('click', () => renderRide(true));
+}
+
+// Au retour dans l'app (après Google Maps), on remonte le bandeau de sortie
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && store.get('ride', null)) {
+    renderRide();
+    $('#ride').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+});
 
 function updateSavedCount() {
   const n = store.get('saved', []).length;
@@ -638,6 +780,7 @@ function updateSavedCount() {
 }
 
 let savedFilter = 'all';
+const savedLive = new Map(); // état trafic des parcours enregistrés (non conservé)
 
 function renderSaved() {
   const all = store.get('saved', []);
@@ -663,7 +806,7 @@ function renderSaved() {
     : !list.length
       ? '<p class="muted empty">Aucun parcours dans ce filtre.</p>'
       : '';
-  box.innerHTML = toolbar + empty + list.map((r, i) => routeCard(r, i, { saved: true }).replace(`data-i="${i}"`, `data-id="${r.id}"`)).join('');
+  box.innerHTML = toolbar + empty + list.map((r, i) => routeCard({ ...r, traffic: savedLive.get(r.id)?.traffic }, i, { saved: true }).replace(`data-i="${i}"`, `data-id="${r.id}"`)).join('');
 
   box.querySelectorAll('[data-filter]').forEach((b) =>
     b.addEventListener('click', () => {
@@ -712,7 +855,7 @@ function renderSaved() {
       if (act === 'done' || act === 'undone') {
         updateSaved(id, (x) => {
           const done = [...(x.done || [])];
-          if (act === 'done') done.push(new Date().toISOString());
+          if (act === 'done') done.push({ date: new Date().toISOString() });
           else done.pop();
           return { done };
         });
@@ -722,7 +865,18 @@ function renderSaved() {
         return;
       }
       if (act === 'gpx') return download(`michi-${r.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}.gpx`, toGPX(r, r.name));
-      if (act === 'gmaps') return;
+      if (act === 'start') return startRide(r);
+      if (act === 'traffic') {
+        const live = savedLive.get(id) || r;
+        savedLive.set(id, live);
+        return refreshTraffic(live, card, card.classList.contains('is-selected'));
+      }
+      if (act === 'rename') {
+        const name = prompt('Nouveau nom', r.name);
+        if (!name || !name.trim()) return;
+        updateSaved(id, { name: name.trim().slice(0, 60) });
+        return renderSaved();
+      }
       if (act === 'del') {
         if (!confirm(`Supprimer « ${r.name} » ?`)) return;
         store.set('saved', store.get('saved', []).filter((x) => x.id !== id));
@@ -731,7 +885,7 @@ function renderSaved() {
       }
       routeLayer.clearLayers();
       showLegend(true);
-      drawOne(r, ROUTE_COLORS[0], true);
+      drawOne(savedLive.get(id) || r, ROUTE_COLORS[0], true);
       map.fitBounds(L.latLngBounds(r.coords).pad(0.12));
       box.querySelectorAll('.card').forEach((c) => c.classList.toggle('is-selected', c === card));
       revealMap();
@@ -770,6 +924,7 @@ function escapeHtml(s) {
 }
 
 // ---------- Démarrage ----------
+renderRide();
 renderPlaces();
 renderLevels();
 applyLevelDefaults();

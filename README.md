@@ -36,14 +36,20 @@ npm test         # tests du moteur de calcul
 npm run build    # version de production dans dist/
 ```
 
-## Trafic en direct (optionnel)
+## Trafic sur le parcours (optionnel)
 
-Un bouton « feu tricolore » sur la carte affiche le trafic en temps réel (couche TomTom, mise à jour toutes les 2 minutes). Il n'apparaît que si une clé est configurée :
+Avec une clé TomTom, Michi vérifie le trafic **sur chaque parcours proposé** : une dizaine de points le long de la boucle, vitesse actuelle comparée à la vitesse habituelle. Sous le parcours : « fluide », « ralentissements » ou « bouchons », l'impact potentiel, le retard estimé et la durée avec le trafic. Les endroits ralentis sont marqués sur la carte. Pour un parcours enregistré : « Vérifier le trafic maintenant ».
 
-1. Créer un compte gratuit sur [developer.tomtom.com](https://developer.tomtom.com) (sans carte bancaire) et copier la clé d'API.
-2. Dans Vercel : *Settings > Environment Variables*, ajouter `VITE_TOMTOM_KEY` avec la clé, puis *Redeploy*.
+1. Compte gratuit sur [developer.tomtom.com](https://developer.tomtom.com), copier la clé (« My first API key »), restreindre la clé au domaine de l'app (Domain whitelisting).
+2. Vercel : *Settings > Environment Variables*, `VITE_TOMTOM_KEY` (type *Config*), puis *Redeploy*.
 
-L'offre gratuite couvre largement un usage personnel (quota mensuel de tuiles). Le trafic est affiché, il n'influence pas le calcul des parcours.
+## Démarrer une sortie
+
+« Démarrer » enregistre le parcours et ouvre le guidage dans Google Maps. En revenant dans Michi, un bandeau « Sortie en cours » propose de **terminer** : étoiles, « à refaire », commentaire. La sortie est ajoutée au journal du parcours avec sa durée réelle.
+
+## Durées
+
+La durée estimée part des vitesses autorisées, réduites pour refléter une conduite réelle (65 % à 30 km/h, jusqu'à 85 % sur voie rapide), plus 20 s par feu et 8 s par rond-point. Le trafic en direct s'ajoute séparément.
 
 ## Mettre en ligne (GitHub + Vercel)
 
