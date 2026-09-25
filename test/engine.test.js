@@ -9,27 +9,27 @@ import { gridOSM } from './fixture.js';
 
 describe('vitesses belges', () => {
   it('lit les valeurs numériques et implicites', () => {
-    expect(parseMaxspeed('70', 'WAL')).toBe(70);
-    expect(parseMaxspeed('BE-VLG:rural', 'WAL')).toBe(70);
-    expect(parseMaxspeed('BE-WAL:rural', 'VLG')).toBe(90);
-    expect(parseMaxspeed('BE:urban', 'BRU')).toBe(30);
-    expect(parseMaxspeed('BE:urban', 'VLG')).toBe(50);
-    expect(parseMaxspeed('BE:zone30', 'WAL')).toBe(30);
-    expect(parseMaxspeed('BE:motorway', 'WAL')).toBe(120);
-    expect(parseMaxspeed('none', 'WAL')).toBeNull();
+    expect(parseMaxspeed('70', 'BE-WAL')).toBe(70);
+    expect(parseMaxspeed('BE-VLG:rural', 'BE-WAL')).toBe(70);
+    expect(parseMaxspeed('BE-WAL:rural', 'BE-VLG')).toBe(90);
+    expect(parseMaxspeed('BE:urban', 'BE-BRU')).toBe(30);
+    expect(parseMaxspeed('BE:urban', 'BE-VLG')).toBe(50);
+    expect(parseMaxspeed('BE:zone30', 'BE-WAL')).toBe(30);
+    expect(parseMaxspeed('BE:motorway', 'BE-WAL')).toBe(120);
+    expect(parseMaxspeed('none', 'BE-WAL')).toBeNull();
   });
   it('applique les défauts régionaux quand rien n’est signalé', () => {
-    expect(resolveSpeed({ highway: 'secondary' }, 'forward', 'VLG')).toEqual({ speed: 70, estimated: true });
-    expect(resolveSpeed({ highway: 'secondary' }, 'forward', 'WAL')).toEqual({ speed: 90, estimated: true });
-    expect(resolveSpeed({ highway: 'residential' }, 'forward', 'BRU')).toEqual({ speed: 30, estimated: true });
-    expect(resolveSpeed({ highway: 'primary', 'maxspeed:backward': '50', maxspeed: '70' }, 'backward', 'WAL').speed).toBe(50);
-    expect(resolveSpeed({ highway: 'residential', 'zone:maxspeed': 'BE:30' }, 'forward', 'WAL')).toEqual({ speed: 30, estimated: false });
+    expect(resolveSpeed({ highway: 'secondary' }, 'forward', 'BE-VLG')).toEqual({ speed: 70, estimated: true });
+    expect(resolveSpeed({ highway: 'secondary' }, 'forward', 'BE-WAL')).toEqual({ speed: 90, estimated: true });
+    expect(resolveSpeed({ highway: 'residential' }, 'forward', 'BE-BRU')).toEqual({ speed: 30, estimated: true });
+    expect(resolveSpeed({ highway: 'primary', 'maxspeed:backward': '50', maxspeed: '70' }, 'backward', 'BE-WAL').speed).toBe(50);
+    expect(resolveSpeed({ highway: 'residential', 'zone:maxspeed': 'BE:30' }, 'forward', 'BE-WAL')).toEqual({ speed: 30, estimated: false });
   });
 });
 
 describe('graphe', () => {
   const osm = gridOSM();
-  const g = buildGraph(osm, 'WAL');
+  const g = buildGraph(osm, 'BE-WAL');
   it('respecte les sens uniques et les accès privés', () => {
     const owId = osm.elements.find((el) => el.tags && el.tags.oneway === 'yes').id;
     expect(g.out.flat().filter((e) => e.way === owId).length).toBe(1); // la rue à sens unique n'a qu'une arête
@@ -46,7 +46,7 @@ describe('graphe', () => {
 
 describe('boucles', () => {
   const osm = gridOSM();
-  const g = buildGraph(osm, 'WAL');
+  const g = buildGraph(osm, 'BE-WAL');
   const start = [osm.center.lat, osm.center.lon];
 
   it('calcule un plus court chemin', () => {
@@ -109,5 +109,19 @@ describe('requête Overpass', () => {
     const q = buildQuery([50.4, 4.8, 50.5, 4.9], new Set(['residential', 'primary']));
     expect(q).toContain('[bbox:50.40000,4.80000,50.50000,4.90000]');
     expect(q).toContain('^(primary|residential)$');
+  });
+});
+
+describe('autres pays', () => {
+  it('applique les règles du pays', () => {
+    expect(resolveSpeed({ highway: 'secondary' }, 'forward', 'FR').speed).toBe(80);
+    expect(resolveSpeed({ highway: 'motorway' }, 'forward', 'FR').speed).toBe(130);
+    expect(resolveSpeed({ highway: 'trunk' }, 'forward', 'NL').speed).toBe(100);
+    expect(resolveSpeed({ highway: 'secondary' }, 'forward', 'DE').speed).toBe(100);
+    expect(resolveSpeed({ highway: 'secondary' }, 'forward', 'XX').speed).toBe(80);
+    expect(parseMaxspeed('FR:urban', 'BE-WAL')).toBe(50);
+    expect(parseMaxspeed('DE:rural', 'FR')).toBe(100);
+    expect(parseMaxspeed('GB:nsl_single', 'GB')).toBe(97);
+    expect(parseMaxspeed('30 mph', 'GB')).toBe(48);
   });
 });

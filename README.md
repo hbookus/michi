@@ -1,6 +1,6 @@
 # Michi · parcours pour apprendre à conduire
 
-Michi propose des **boucles de conduite** autour d'un point de départ, en Belgique, selon ce qu'on veut travailler (petites rues, ville, routes, voies rapides) et le temps ou la distance disponible.
+Michi propose des **boucles de conduite** autour d'un point de départ (pensée pour la Belgique, utilisable dans d'autres pays), selon ce qu'on veut travailler (petites rues, ville, routes, voies rapides) et le temps ou la distance disponible.
 
 Aucune IA dans la boucle : tout est calculé à partir des **données routières réelles d'OpenStreetMap** (types de routes, vitesses maximales, sens uniques, ronds-points, feux).
 
@@ -12,12 +12,17 @@ Aucune IA dans la boucle : tout est calculé à partir des **données routières
 - Réglages : vitesse maximale, ronds-points (éviter / indifférent / en chercher), feux, sans autoroute.
 - Trois parcours proposés, avec pour chacun : distance, durée estimée, km par tranche de vitesse, nombre de ronds-points et de feux, principaux axes.
 - Export **GPX** (à ouvrir dans OsmAnd ou Organic Maps, qui guident le long du tracé) et lien **Google Maps** (approximatif : 9 étapes maximum).
-- **Mes parcours** : enregistrement local dans le navigateur.
+- **Mes parcours** : enregistrement dans le navigateur, avec note en étoiles, case « À refaire », commentaire et journal des sorties faites. Filtres « À refaire » et « 4 étoiles et plus ».
+- **Sauvegarde / restauration** des parcours dans un fichier `.json` (pour changer d'appareil ou de navigateur).
+
+### Où sont gardés les parcours ?
+
+Dans le stockage local du navigateur (`localStorage`), sur l'appareil utilisé. Ils restent après un rechargement ou un redémarrage. Ils disparaissent si on efface les données du site, en navigation privée, et ne passent pas d'un appareil à l'autre : d'où le bouton « Sauvegarder dans un fichier ». Sur iPhone, ajouter l'app à l'écran d'accueil (Partager > Sur l'écran d'accueil) évite que Safari efface les données d'un site non visité depuis longtemps.
 
 ## D'où viennent les vitesses
 
 1. Vitesse signalée dans OpenStreetMap (`maxspeed`, y compris `BE-VLG:rural`, `BE:zone30`…).
-2. Sinon, règle régionale selon la région du départ : hors agglomération 70 km/h en Flandre, 90 km/h en Wallonie ; en agglomération 50 km/h (30 km/h à Bruxelles).
+2. Sinon, règle du pays du départ (et de la région en Belgique) : hors agglomération 70 km/h en Flandre, 90 km/h en Wallonie, 80 km/h en France… Pays prévus : Belgique, France, Luxembourg, Pays-Bas, Allemagne, Suisse, Autriche, Espagne, Italie, Portugal, Royaume-Uni, Irlande. Ailleurs, règles génériques (50 / 80 / 110) signalées dans l'app.
 
 L'app affiche la part des vitesses « estimées » (non renseignées dans OSM). **Les panneaux sur place font toujours foi.**
 
@@ -48,7 +53,7 @@ Aucune clé d'API ni variable d'environnement n'est nécessaire.
 | Fichier | Rôle |
 |---|---|
 | `src/data.js` | Téléchargement des routes via l'API Overpass (OSM), région via Nominatim |
-| `src/speed.js` | Règles de vitesse belges |
+| `src/speed.js` | Règles de vitesse par pays (et région belge) |
 | `src/graph.js` | Construction du graphe routier, filtres (accès privés, sens uniques, revêtement) |
 | `src/router.js` | A* et génération de boucles (deux points de passage sur un cercle, ajustés pour atteindre l'objectif) |
 | `src/stats.js` | Distance, durée estimée, tranches de vitesse, ronds-points, feux |

@@ -51,9 +51,9 @@ export const LEVELS = {
   },
   rapide: {
     label: 'Voies rapides',
-    hint: 'Insertions, dépassements, 90 à 120 km/h',
+    hint: 'Insertions, dépassements, 90 à 130 km/h',
     highways: [...MEDIUM, ...LARGE, ...FAST],
-    maxSpeed: 120,
+    maxSpeed: 130,
     prefMin: 90,
     roundabouts: 'neutral',
     signals: 'avoid',

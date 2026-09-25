@@ -1,4 +1,5 @@
 import { bboxAround } from './geo.js';
+import { zoneCode } from './speed.js';
 
 // Serveurs Overpass publics (données OpenStreetMap). Essayés dans l'ordre.
 const OVERPASS = [
@@ -74,27 +75,22 @@ export async function fetchRoads(lat, lon, radius, highways, onStatus = () => {}
   throw new Error(`Impossible de récupérer les données OpenStreetMap (${lastErr?.message || 'erreur réseau'}). Réessaie dans une minute.`);
 }
 
-// Région belge du point de départ (pour les vitesses par défaut)
+// Pays / région du point de départ (pour les vitesses par défaut)
 export async function detectRegion(lat, lon) {
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat=${lat}&lon=${lon}&accept-language=fr`;
     const res = await fetch(url);
     const j = await res.json();
     const a = j.address || {};
-    const iso = a['ISO3166-2-lvl4'] || '';
-    const inBelgium = a.country_code === 'be';
-    let region = null;
-    if (iso === 'BE-VLG') region = 'VLG';
-    else if (iso === 'BE-WAL') region = 'WAL';
-    else if (iso === 'BE-BRU') region = 'BRU';
-    return { region, inBelgium, place: a.city || a.town || a.village || a.municipality || '' };
+    const zone = zoneCode(a.country_code, a['ISO3166-2-lvl4']);
+    return { zone, known: zone !== 'DEFAULT', country: a.country || '', place: a.city || a.town || a.village || a.municipality || '' };
   } catch {
-    return { region: null, inBelgium: true, place: '' };
+    return { zone: null, known: false, country: '', place: '' };
   }
 }
 
 export async function searchPlace(q) {
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=be&accept-language=fr&q=${encodeURIComponent(q)}`;
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=fr&q=${encodeURIComponent(q)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('Recherche indisponible');
   const list = await res.json();

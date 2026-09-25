@@ -6,7 +6,7 @@ import { LEVELS, buildCriteria } from './levels.js';
 import { detectRegion, fetchRoads, radiusFor, searchPlace } from './data.js';
 import { buildGraph } from './graph.js';
 import { generateLoops } from './router.js';
-import { REGIONS, SPEED_BANDS, bandOf } from './speed.js';
+import { SPEED_BANDS, bandOf, zoneOf } from './speed.js';
 import { formatDuration, formatKm } from './stats.js';
 import { download, googleMapsUrl, toGPX } from './export.js';
 
@@ -91,10 +91,10 @@ function updateStartInfo() {
   let region = '';
   const info = state.regionInfo;
   if (info) {
-    if (!info.inBelgium) region = '<span class="warn">Hors de Belgique : les vitesses par défaut peuvent être fausses.</span>';
-    else if (info.region) {
-      const r = REGIONS[info.region];
-      region = `<span class="chip">${r.label}</span> hors agglomération ${r.rural} km/h par défaut`;
+    if (info.zone && !info.known) region = `<span class="warn">${escapeHtml(info.country || 'Pays')} : règles génériques (hors agglomération 80 km/h). Les vitesses « estimées » peuvent être fausses.</span>`;
+    else if (info.zone) {
+      const z = zoneOf(info.zone);
+      region = `<span class="chip">${z.label}</span> hors agglomération ${z.rural} km/h par défaut`;
     }
   }
   el.innerHTML = `<strong>${name}</strong>${region ? `<br>${region}` : ''}`;
@@ -271,7 +271,7 @@ $('#go').addEventListener('click', async () => {
       state.regionInfo = await detectRegion(state.start.lat, state.start.lon);
       updateStartInfo();
     }
-    const region = state.regionInfo.region || 'WAL';
+    const region = state.regionInfo.zone || 'DEFAULT';
 
     const data = await fetchRoads(state.start.lat, state.start.lon, radiusFor(approxDist), criteria.highways, (m) => setStatus(m));
     if (graphCache.data !== data || graphCache.region !== region) {
@@ -393,12 +393,51 @@ function routeCard(r, i, { saved = false } = {}) {
       ${roads}
       <p class="small muted">${escapeHtml(LEVELS[r.level]?.label || '')}${r.criteria ? ' · ' + escapeHtml(r.criteria) : ''} · ${est ? `${est} % des vitesses estimées` : 'vitesses toutes signalées dans OSM'}</p>
       ${gap}
+      ${saved ? notesBlock(r) : ''}
       <div class="actions">
         <button type="button" class="btn-ghost" data-act="gpx">GPX</button>
         <a class="btn-ghost" data-act="gmaps" href="${googleMapsUrl(r)}" target="_blank" rel="noopener">Google Maps</a>
         ${saved ? '<button type="button" class="btn-ghost" data-act="show">Afficher</button><button type="button" class="btn-ghost danger" data-act="del">Supprimer</button>' : '<button type="button" class="btn-ghost" data-act="save">Enregistrer</button>'}
       </div>
     </article>`;
+}
+
+function doneSummary(r) {
+  const d = r.done || [];
+  if (!d.length) return 'Pas encore fait';
+  const last = new Date(d[d.length - 1]).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' });
+  return `Fait ${d.length} fois · dernière le ${last}`;
+}
+
+function notesBlock(r) {
+  const rating = r.rating || 0;
+  const stars = [1, 2, 3, 4, 5]
+    .map((n) => `<button type="button" class="star${n <= rating ? ' is-on' : ''}" data-act="star" data-v="${n}" aria-label="${n} étoile${n > 1 ? 's' : ''}" aria-pressed="${n <= rating}">★</button>`)
+    .join('');
+  return `
+      <div class="notes">
+        <div class="notes-row">
+          <div class="stars" aria-label="Note">${stars}</div>
+          <label class="redo"><input type="checkbox" data-act="redo"${r.redo ? ' checked' : ''} /> À refaire</label>
+        </div>
+        <textarea data-act="comment" rows="2" placeholder="Remarques : ce qui a bien marché, un carrefour délicat, à retravailler…">${escapeHtml(r.comment || '')}</textarea>
+        <div class="notes-row">
+          <span class="small muted" data-done-label>${doneSummary(r)}</span>
+          <span class="done-btns">
+            ${(r.done || []).length ? '<button type="button" class="link" data-act="undone">Annuler</button>' : ''}
+            <button type="button" class="btn-ghost small-btn" data-act="done">Fait aujourd'hui</button>
+          </span>
+        </div>
+      </div>`;
+}
+
+function updateSaved(id, patch) {
+  const saved = store.get('saved', []);
+  const r = saved.find((x) => x.id === id);
+  if (!r) return null;
+  Object.assign(r, typeof patch === 'function' ? patch(r) : patch);
+  store.set('saved', saved);
+  return r;
 }
 
 function fileName(r, i) {
@@ -441,6 +480,9 @@ function saveRoute(r, btn) {
     coords: r.coords.map(([a, b]) => [+a.toFixed(5), +b.toFixed(5)]),
     speeds: r.edges.map((e) => e.speed),
   });
+  try {
+    navigator.storage?.persist?.();
+  } catch {}
   if (!store.set('saved', saved)) return setStatus("Impossible d'enregistrer : stockage du navigateur indisponible.", 'error');
   btn.textContent = 'Enregistré';
   btn.disabled = true;
@@ -452,24 +494,94 @@ function updateSavedCount() {
   $('#saved-count').textContent = n ? n : '';
 }
 
+let savedFilter = 'all';
+
 function renderSaved() {
-  const saved = store.get('saved', []);
+  const all = store.get('saved', []);
   const box = $('#saved');
   routeLayer.clearLayers();
-  if (!saved.length) {
-    box.innerHTML = '<p class="muted empty">Aucun parcours enregistré. Après un calcul, touche « Enregistrer » sur un parcours pour le retrouver ici.</p>';
-    return;
-  }
-  box.innerHTML = saved.map((r, i) => routeCard(r, i, { saved: true })).join('');
+  const redoCount = all.filter((r) => r.redo).length;
+  const toolbar = `
+    <div class="saved-bar">
+      <div class="filters">
+        <button type="button" class="filter${savedFilter === 'all' ? ' is-active' : ''}" data-filter="all">Tous (${all.length})</button>
+        <button type="button" class="filter${savedFilter === 'redo' ? ' is-active' : ''}" data-filter="redo">À refaire (${redoCount})</button>
+        <button type="button" class="filter${savedFilter === 'top' ? ' is-active' : ''}" data-filter="top">★ 4 et plus</button>
+      </div>
+      <p class="small muted">Gardés dans ce navigateur, sur cet appareil.
+        <button type="button" class="link" data-backup="export">Sauvegarder dans un fichier</button> ·
+        <button type="button" class="link" data-backup="import">Restaurer</button>
+      </p>
+    </div>`;
+  const list = all.filter((r) => savedFilter === 'all' || (savedFilter === 'redo' ? r.redo : (r.rating || 0) >= 4));
+  const empty = !all.length
+    ? '<p class="muted empty">Aucun parcours enregistré. Après un calcul, touche « Enregistrer » sur un parcours pour le retrouver ici.</p>'
+    : !list.length
+      ? '<p class="muted empty">Aucun parcours dans ce filtre.</p>'
+      : '';
+  box.innerHTML = toolbar + empty + list.map((r, i) => routeCard(r, i, { saved: true }).replace(`data-i="${i}"`, `data-id="${r.id}"`)).join('');
+
+  box.querySelectorAll('[data-filter]').forEach((b) =>
+    b.addEventListener('click', () => {
+      savedFilter = b.dataset.filter;
+      renderSaved();
+    })
+  );
+  box.querySelector('[data-backup=export]').addEventListener('click', () => {
+    const d = new Date().toISOString().slice(0, 10);
+    download(`michi-sauvegarde-${d}.json`, JSON.stringify({ app: 'michi', version: 1, saved: store.get('saved', []) }), 'application/json');
+  });
+  box.querySelector('[data-backup=import]').addEventListener('click', importBackup);
+
   box.querySelectorAll('.card').forEach((card) => {
-    const r = saved[+card.dataset.i];
+    const id = +card.dataset.id;
+    const get = () => store.get('saved', []).find((x) => x.id === id);
+    const comment = card.querySelector('textarea');
+    let t;
+    comment.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(() => updateSaved(id, { comment: comment.value }), 400);
+    });
+    comment.addEventListener('blur', () => updateSaved(id, { comment: comment.value }));
+    card.querySelector('[data-act=redo]').addEventListener('change', (e) => {
+      updateSaved(id, { redo: e.target.checked });
+      const n = store.get('saved', []).filter((r) => r.redo).length;
+      box.querySelector('[data-filter=redo]').textContent = `À refaire (${n})`;
+    });
     card.addEventListener('click', (e) => {
-      const act = e.target.closest('[data-act]')?.dataset.act;
+      const el = e.target.closest('[data-act]');
+      const act = el?.dataset.act;
+      const r = get();
+      if (!r) return;
+      if (act === 'comment' || act === 'redo' || (!act && e.target.closest('.notes'))) return;
+      if (act === 'star') {
+        const v = +el.dataset.v;
+        const rating = r.rating === v ? 0 : v;
+        updateSaved(id, { rating });
+        card.querySelectorAll('.star').forEach((s) => {
+          const on = +s.dataset.v <= rating;
+          s.classList.toggle('is-on', on);
+          s.setAttribute('aria-pressed', on);
+        });
+        return;
+      }
+      if (act === 'done' || act === 'undone') {
+        updateSaved(id, (x) => {
+          const done = [...(x.done || [])];
+          if (act === 'done') done.push(new Date().toISOString());
+          else done.pop();
+          return { done };
+        });
+        const scrollY = window.scrollY;
+        renderSaved();
+        window.scrollTo(0, scrollY);
+        return;
+      }
       if (act === 'gpx') return download(`michi-${r.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}.gpx`, toGPX(r, r.name));
       if (act === 'gmaps') return;
       if (act === 'del') {
         if (!confirm(`Supprimer « ${r.name} » ?`)) return;
-        store.set('saved', saved.filter((x) => x.id !== r.id));
+        store.set('saved', store.get('saved', []).filter((x) => x.id !== id));
         updateSavedCount();
         return renderSaved();
       }
@@ -480,6 +592,32 @@ function renderSaved() {
       revealMap();
     });
   });
+}
+
+function importBackup() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.addEventListener('change', async () => {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const incoming = Array.isArray(data) ? data : data.saved;
+      if (!Array.isArray(incoming)) throw new Error();
+      const current = store.get('saved', []);
+      const ids = new Set(current.map((r) => r.id));
+      const added = incoming.filter((r) => r && r.id && r.coords && !ids.has(r.id));
+      const merged = [...current, ...added].sort((a, b) => new Date(b.date) - new Date(a.date));
+      store.set('saved', merged);
+      updateSavedCount();
+      renderSaved();
+      alert(`${added.length} parcours restauré${added.length > 1 ? 's' : ''}.`);
+    } catch {
+      alert("Ce fichier n'est pas une sauvegarde Michi.");
+    }
+  });
+  input.click();
 }
 
 function escapeHtml(s) {

@@ -332,3 +332,31 @@ a { color: var(--accent); }
   .map-wrap { position: relative; height: auto; flex: 1; border: 0; border-left: 1px solid var(--line); }
   .panel { width: 440px; max-width: none; flex: none; overflow-y: auto; margin: 0; padding: 24px 22px 32px; }
 }
+
+/* ---------- Notes des parcours enregistrés ---------- */
+.notes { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 8px; }
+.notes-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.stars { display: flex; gap: 2px; }
+.star { border: 0; background: none; font-size: 24px; line-height: 1; padding: 2px; color: var(--line); cursor: pointer; }
+.star.is-on { color: #d4a232; }
+.redo { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
+.redo input { accent-color: var(--vermilion); width: 18px; height: 18px; }
+.notes textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.done-btns { display: flex; align-items: center; gap: 10px; }
+.small-btn { padding: 6px 10px; font-size: 13px; }
+.link { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.saved-bar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.saved-bar p { margin: 0; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.filter { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.filter.is-active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }

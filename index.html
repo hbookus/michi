@@ -39,7 +39,7 @@
           <fieldset class="block">
             <legend>Départ</legend>
             <form id="search" class="search" autocomplete="off">
-              <input id="q" type="search" placeholder="Adresse, commune…" aria-label="Rechercher un lieu de départ" />
+              <input id="q" type="search" placeholder="Adresse, commune, pays…" aria-label="Rechercher un lieu de départ" />
               <button type="submit" class="btn-ghost">Chercher</button>
             </form>
             <ul id="search-results" class="search-results" hidden></ul>
@@ -73,6 +73,7 @@
                   <option value="70">70 km/h</option>
                   <option value="90">90 km/h</option>
                   <option value="120">120 km/h</option>
+                  <option value="130">130 km/h</option>
                 </select>
               </label>
               <label>Ronds-points
@@ -102,7 +103,7 @@
         </div>
 
         <footer class="foot">
-          <p>Vitesses et routes issues d'<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. Quand une vitesse n'est pas renseignée, Michi applique la règle régionale et l'indique comme « estimée ». Les panneaux sur place font toujours foi.</p>
+          <p>Vitesses et routes issues d'<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. Quand une vitesse n'est pas renseignée, Michi applique la règle du pays (et de la région en Belgique) et l'indique comme « estimée ». Les panneaux sur place font toujours foi.</p>
         </footer>
       </main>
     </div>
