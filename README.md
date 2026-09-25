@@ -48,11 +48,31 @@ npm run build    # version de production dans dist/
 
 Aucune clé d'API ni variable d'environnement n'est nécessaire.
 
+## Données préparées à l'avance (recommandé)
+
+Les serveurs Overpass publics sont souvent saturés (délais, erreurs 504). Le workflow `.github/workflows/tiles.yml` prépare donc chaque mois toutes les routes de Belgique :
+
+1. il télécharge l'extrait OpenStreetMap du pays chez Geofabrik ;
+2. il garde les routes carrossables avec leurs attributs (type, vitesse, sens unique, rond-point, revêtement, accès, nom) et les feux ;
+3. il les découpe en carreaux d'environ 11 × 10 km, publiés sur GitHub Pages ;
+4. il écrit leur adresse dans `public/tiles.json`, ce qui redéploie l'app sur Vercel.
+
+Ce sont exactement les mêmes données qu'avec Overpass, petites rues comprises, simplement préparées. L'app charge les carreaux autour du départ en 1 à 2 secondes et revient à Overpass hors de la zone couverte.
+
+**Mise en place, une seule fois :**
+
+1. Sur GitHub : *Settings > Pages > Build and deployment > Source* : **GitHub Actions**.
+2. Onglet *Actions* > **Préparer les carreaux** > *Run workflow*. Compter 5 à 10 minutes.
+
+Pour ajouter un pays : modifier `REGIONS` dans le workflow (ex. `europe/belgium europe/luxembourg`).
+
 ## Architecture
 
 | Fichier | Rôle |
 |---|---|
-| `src/data.js` | Téléchargement des routes via l'API Overpass (OSM), région via Nominatim |
+| `src/data.js` | Chargement des routes (carreaux, sinon API Overpass), pays via Nominatim |
+| `src/tiles.js` | Lecture et fusion des carreaux préparés |
+| `scripts/build_tiles.py` | Préparation des carreaux à partir d'un extrait OSM |
 | `src/speed.js` | Règles de vitesse par pays (et région belge) |
 | `src/graph.js` | Construction du graphe routier, filtres (accès privés, sens uniques, revêtement) |
 | `src/router.js` | A* et génération de boucles (deux points de passage sur un cercle, ajustés pour atteindre l'objectif) |

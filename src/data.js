@@ -1,15 +1,17 @@
 import { bboxAround } from './geo.js';
 import { zoneCode } from './speed.js';
+import { fetchFromTiles } from './tiles.js';
 
 // Serveurs Overpass publics (données OpenStreetMap). Essayés dans l'ordre.
 const OVERPASS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 
 const cache = [];
-const TIMEOUT_S = 35;
+const TIMEOUT_S = 30;
 
 function contains(outer, inner) {
   return outer[0] <= inner[0] && outer[1] <= inner[1] && outer[2] >= inner[2] && outer[3] >= inner[3];
@@ -22,12 +24,11 @@ export function radiusFor(distanceMeters) {
 export function buildQuery(bbox, highways) {
   const types = [...highways].sort().join('|');
   const b = bbox.map((x) => x.toFixed(5)).join(',');
-  return `[out:json][timeout:120][bbox:${b}];
-(
-  way["highway"~"^(${types})$"];
-  node["highway"="traffic_signals"];
-);
-out body geom qt;`;
+  return `[out:json][timeout:30][bbox:${b}];
+way["highway"~"^(${types})$"]->.r;
+.r out body geom qt;
+node(w.r)["highway"="traffic_signals"];
+out qt;`;
 }
 
 export async function fetchRoads(lat, lon, radius, highways, onStatus = () => {}) {
@@ -35,9 +36,27 @@ export async function fetchRoads(lat, lon, radius, highways, onStatus = () => {}
   const hit = cache.find((c) => contains(c.bbox, bbox) && [...highways].every((h) => c.highways.has(h)));
   if (hit) return hit.data;
 
+  // 1. Carreaux préparés (rapide, si la zone est couverte)
+  try {
+    const fromTiles = await fetchFromTiles(lat, lon, bbox, highways, onStatus);
+    if (fromTiles) {
+      cache.push({ bbox, highways: new Set(highways), data: fromTiles });
+      if (cache.length > 3) cache.shift();
+      return fromTiles;
+    }
+  } catch (err) {
+    console.warn('Carreaux indisponibles, passage par Overpass', err);
+  }
+
+  // 2. Serveurs Overpass publics (deux tours, avec une pause entre les deux)
+
   const query = buildQuery(bbox, highways);
   let lastErr;
-  for (const url of OVERPASS) {
+  for (const url of [...OVERPASS, OVERPASS[0], OVERPASS[1]]) {
+    if (lastErr && url === OVERPASS[0]) {
+      onStatus('Serveurs chargés, nouvel essai dans 3 s…');
+      await new Promise((r) => setTimeout(r, 3000));
+    }
     const host = new URL(url).host;
     const ctrl = new AbortController();
     const t0 = Date.now();
@@ -55,7 +74,7 @@ export async function fetchRoads(lat, lon, radius, highways, onStatus = () => {}
         signal: ctrl.signal,
       });
       clearInterval(timer);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}${res.status === 504 || res.status === 429 ? ' (serveur saturé)' : ''}`);
       onStatus(`Réception des routes (${host})…`);
       const data = await res.json();
       if (!data.elements) throw new Error('Réponse vide');
