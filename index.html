@@ -19,6 +19,10 @@
         <button id="locate" class="map-btn" type="button" title="Ma position" aria-label="Utiliser ma position">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="currentColor"/><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
+        <button id="traffic" class="map-btn map-btn-2" type="button" title="Trafic en direct" aria-label="Afficher le trafic en direct" aria-pressed="false" hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="7" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="17" r="1.8" fill="currentColor"/></svg>
+        </button>
+        <div id="map-legend" class="map-legend" hidden></div>
       </section>
 
       <main class="panel">
@@ -43,6 +47,7 @@
               <button type="submit" class="btn-ghost">Chercher</button>
             </form>
             <ul id="search-results" class="search-results" hidden></ul>
+            <div id="places" class="places"></div>
             <p id="start-info" class="muted">Touche la carte, cherche une adresse ou utilise ta position.</p>
           </fieldset>
 
