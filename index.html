@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f2ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="Des parcours en boucle pour apprendre à conduire en Belgique, calculés sur les vraies données routières (OpenStreetMap)." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <title>Michi · parcours de conduite</title>
+  </head>
+  <body>
+    <div class="app">
+      <section class="map-wrap">
+        <div id="map" aria-label="Carte"></div>
+        <button id="locate" class="map-btn" type="button" title="Ma position" aria-label="Utiliser ma position">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="currentColor"/><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </section>
+
+      <main class="panel">
+        <header class="brand">
+          <div class="mark" aria-hidden="true">道</div>
+          <div>
+            <h1>Michi</h1>
+            <p>Des parcours pour apprendre à conduire, calculés sur les vraies données routières.</p>
+          </div>
+        </header>
+
+        <nav class="tabs" role="tablist">
+          <button role="tab" class="tab is-active" data-tab="plan" aria-selected="true">Préparer une sortie</button>
+          <button role="tab" class="tab" data-tab="saved" aria-selected="false">Mes parcours <span id="saved-count" class="count"></span></button>
+        </nav>
+
+        <div id="tab-plan" class="tab-body">
+          <fieldset class="block">
+            <legend>Départ</legend>
+            <form id="search" class="search" autocomplete="off">
+              <input id="q" type="search" placeholder="Adresse, commune…" aria-label="Rechercher un lieu de départ" />
+              <button type="submit" class="btn-ghost">Chercher</button>
+            </form>
+            <ul id="search-results" class="search-results" hidden></ul>
+            <p id="start-info" class="muted">Touche la carte, cherche une adresse ou utilise ta position.</p>
+          </fieldset>
+
+          <fieldset class="block">
+            <legend>Ce qu'on travaille</legend>
+            <div id="levels" class="levels" role="radiogroup"></div>
+          </fieldset>
+
+          <fieldset class="block">
+            <legend>Durée de la sortie</legend>
+            <div class="segmented" role="radiogroup" aria-label="Type d'objectif">
+              <button type="button" class="seg is-active" data-mode="duration">En temps</button>
+              <button type="button" class="seg" data-mode="distance">En distance</button>
+            </div>
+            <div class="slider-row">
+              <input id="amount" type="range" min="10" max="90" step="5" value="30" aria-label="Objectif" />
+              <output id="amount-out">30 min</output>
+            </div>
+          </fieldset>
+
+          <details class="block tune">
+            <summary>Ajuster les critères</summary>
+            <div class="tune-grid">
+              <label>Vitesse maximale
+                <select id="max-speed">
+                  <option value="30">30 km/h</option>
+                  <option value="50">50 km/h</option>
+                  <option value="70">70 km/h</option>
+                  <option value="90">90 km/h</option>
+                  <option value="120">120 km/h</option>
+                </select>
+              </label>
+              <label>Ronds-points
+                <select id="roundabouts">
+                  <option value="avoid">Éviter</option>
+                  <option value="neutral">Indifférent</option>
+                  <option value="prefer">En chercher</option>
+                </select>
+              </label>
+              <label>Feux tricolores
+                <select id="signals">
+                  <option value="avoid">Éviter</option>
+                  <option value="neutral">Indifférent</option>
+                </select>
+              </label>
+              <label class="check"><input id="avoid-motorway" type="checkbox" /> Sans autoroute</label>
+            </div>
+          </details>
+
+          <button id="go" class="btn-primary" type="button" disabled>Proposer des parcours</button>
+          <div id="status" class="status" role="status" aria-live="polite"></div>
+          <div id="results" class="results"></div>
+        </div>
+
+        <div id="tab-saved" class="tab-body" hidden>
+          <div id="saved" class="results"></div>
+        </div>
+
+        <footer class="foot">
+          <p>Vitesses et routes issues d'<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. Quand une vitesse n'est pas renseignée, Michi applique la règle régionale et l'indique comme « estimée ». Les panneaux sur place font toujours foi.</p>
+        </footer>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
